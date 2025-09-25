@@ -2,9 +2,34 @@ import dagster as dg
 from dagster_duckdb import DuckDBResource
 
 from pathlib import Path
+import csv
 
 class IngestionFileConfig(dg.Config):
     path: str
+
+@dg.asset_check(
+    asset=import_file,
+    blocking=True,
+    description="Ensure file contains no zero value shares",
+)
+def not_empty(
+    context: dg.AssetCheckExecutionContext,
+    import_file,
+) -> dg.AssetCheckResult:
+    with open(import_file, mode="r", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        data = (row for row in reader)
+
+        for row in data:
+            if float(row["share_price"]) <= 0:
+                return dg.AssetCheckResult(
+                    passed=False,
+                    metadata={"'share' is below 0": row},
+                )
+
+    return dg.AssetCheckResult(
+        passed=True,
+    )
 
 @dg.asset()
 def import_file(context: dg.AssetExecutionContext, config: IngestionFileConfig) -> str:
