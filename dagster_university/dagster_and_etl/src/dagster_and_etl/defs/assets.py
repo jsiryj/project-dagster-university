@@ -12,6 +12,8 @@ partitions_def = dg.DailyPartitionsDefinition(
     end_date="2018-01-24",
 )
 
+dynamic_partitions_def = dg.DynamicPartitionsDefinition(name="dynamic_partition")
+
 @dg.asset(
     partitions_def=partitions_def,
 )
@@ -22,6 +24,15 @@ def import_partition_file(context: dg.AssetExecutionContext) -> str:
     )
     return str(file_path.resolve())
 
+@dg.asset(
+    partitions_def=dynamic_partitions_def,
+)
+def import_dynamic_partition_file(context: dg.AssetExecutionContext) -> str:
+    file_path = (
+        Path(__file__).absolute().parent
+        / f"../../../data/source/{context.partition_key}.csv"
+    )
+    return str(file_path.resolve())
 
 @dg.asset()
 def import_file(context: dg.AssetExecutionContext, config: IngestionFileConfig) -> str:
@@ -103,3 +114,30 @@ def duckdb_partition_table(
             f"delete from {table_name} where date = '{context.partition_key}';"
         )
         conn.execute(f"copy {table_name} from '{import_partition_file}';")
+
+@dg.asset(
+    kinds={"duckdb"},
+    partitions_def=dynamic_partitions_def,
+)
+def duckdb_dynamic_partition_table(
+    context: dg.AssetExecutionContext,
+    database: DuckDBResource,
+    import_dynamic_partition_file,
+):
+    table_name = "raw_dynamic_partition_data"
+    with database.get_connection() as conn:
+        table_query = f"""
+            create table if not exists {table_name} (
+                date date,
+                share_price float,
+                amount float,
+                spend float,
+                shift float,
+                spread float
+            ) 
+        """
+        conn.execute(table_query)
+        conn.execute(
+            f"delete from {table_name} where date = '{context.partition_key}';"
+        )
+        conn.execute(f"copy {table_name} from '{import_dynamic_partition_file}';")
