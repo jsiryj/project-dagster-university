@@ -7,6 +7,13 @@ import csv
 class IngestionFileConfig(dg.Config):
     path: str
 
+@dg.asset()
+def import_file(context: dg.AssetExecutionContext, config: IngestionFileConfig) -> str:
+    file_path = (
+        Path(__file__).absolute().parent / f"../../../data/source/{config.path}"
+    )
+    return str(file_path.resolve())
+
 @dg.asset_check(
     asset=import_file,
     blocking=True,
@@ -30,13 +37,6 @@ def not_empty(
     return dg.AssetCheckResult(
         passed=True,
     )
-
-@dg.asset()
-def import_file(context: dg.AssetExecutionContext, config: IngestionFileConfig) -> str:
-    file_path = (
-        Path(__file__).absolute().parent / f"../../../data/source/{config.path}"
-    )
-    return str(file_path.resolve())
 
 @dg.asset(
     kinds={"duckdb"},
